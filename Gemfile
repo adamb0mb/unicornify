@@ -2,7 +2,7 @@ source 'http://rubygems.org'
 
 gem 'sinatra', '~> 1.2', :require => 'sinatra/base'
 gem 'dragonfly', '~> 0.9.14'
-#gem 'magickly', '~> 1.2'
+#gem 'magickly', '~> 1.4'
 gem('magickly',
     :git => 'git://github.com/afeld/magickly.git',
     :ref => 'cd17608a9c4468da1f738815a96dc2a9473fc029')
