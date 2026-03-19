@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>FIRECalc — Mobile</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f7f8fa;
+      --card: #ffffff;
+      --border: #e2e5ea;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --warning: #d97706;
+      --danger: #dc2626;
+      --text: #111827;
+      --muted: #6b7280;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    header {
+      background: var(--primary);
+      color: #fff;
+      padding: 20px 16px 16px;
+      padding-top: calc(20px + env(safe-area-inset-top));
+    }
+    header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+    header p  { font-size: 13px; opacity: .85; margin-top: 4px; }
+
+    .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+
+    /* Results banner */
+    #results-banner {
+      display: none;
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    #results-banner.show { display: block; }
+    .success-rate-label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .success-rate-value { font-size: 56px; font-weight: 800; line-height: 1.1; margin: 4px 0; }
+    .success-rate-value.great  { color: var(--success); }
+    .success-rate-value.ok     { color: var(--warning); }
+    .success-rate-value.poor   { color: var(--danger); }
+    .success-rate-sub { font-size: 13px; color: var(--muted); }
+    .result-meta {
+      display: flex; gap: 12px; justify-content: center; margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .result-meta span {
+      background: var(--bg); border-radius: 8px; padding: 6px 12px;
+      font-size: 12px; color: var(--muted);
+    }
+    .result-meta strong { color: var(--text); }
+
+    /* Chart */
+    #chart-card {
+      display: none;
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    #chart-card.show { display: block; }
+    #chart-card h2 { font-size: 14px; color: var(--muted); margin-bottom: 12px; }
+    #portfolioChart { width: 100% !important; }
+
+    /* Card */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-header h2 { font-size: 15px; font-weight: 600; }
+    .card-header .icon { font-size: 18px; }
+    .card-body { padding: 16px; }
+
+    /* Inputs */
+    .field { margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+    label {
+      display: block; font-size: 13px; font-weight: 600;
+      color: var(--text); margin-bottom: 6px;
+    }
+    label .hint { font-weight: 400; color: var(--muted); }
+
+    .input-wrap { position: relative; }
+    .input-prefix, .input-suffix {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      font-size: 16px; color: var(--muted); pointer-events: none;
+    }
+    .input-prefix { left: 14px; }
+    .input-suffix { right: 14px; }
+
+    input[type="number"], input[type="text"], select {
+      width: 100%; font-size: 18px; font-weight: 600;
+      padding: 12px 14px; border: 1.5px solid var(--border);
+      border-radius: 10px; background: var(--bg); color: var(--text);
+      appearance: none; -webkit-appearance: none;
+      outline: none; transition: border-color .15s;
+    }
+    input[type="number"]:focus, input[type="text"]:focus, select:focus {
+      border-color: var(--primary); background: #fff;
+    }
+    .has-prefix input { padding-left: 30px; }
+    .has-suffix input { padding-right: 36px; }
+
+    /* Slider */
+    .slider-row { display: flex; align-items: center; gap: 12px; }
+    input[type="range"] {
+      flex: 1; -webkit-appearance: none; appearance: none;
+      height: 6px; border-radius: 3px;
+      background: linear-gradient(to right, var(--primary) var(--pct, 75%), var(--border) var(--pct, 75%));
+      outline: none; cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 22px; height: 22px;
+      border-radius: 50%; background: var(--primary);
+      border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--primary); border: 3px solid #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,.2); cursor: pointer;
+    }
+    .slider-value {
+      min-width: 52px; text-align: right; font-size: 16px;
+      font-weight: 700; color: var(--primary);
+    }
+
+    /* Collapsible */
+    .collapse-toggle {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+      background: none; border: none; padding: 14px 16px;
+      font-size: 15px; font-weight: 600; color: var(--text);
+      cursor: pointer; border-top: 1px solid var(--border);
+    }
+    .collapse-toggle .chevron {
+      transition: transform .2s; font-size: 14px; color: var(--muted);
+    }
+    .collapse-toggle[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+    .collapse-body { padding: 16px; border-top: 1px solid var(--border); }
+    .collapse-body.hidden { display: none; }
+
+    /* Pension rows */
+    .income-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      margin-bottom: 12px; align-items: end;
+    }
+    .income-row label { margin-bottom: 0; }
+
+    /* Calculate button */
+    .calc-btn {
+      display: block; width: 100%; padding: 16px;
+      background: var(--primary); color: #fff; border: none;
+      border-radius: var(--radius); font-size: 18px; font-weight: 700;
+      cursor: pointer; transition: background .15s; margin-bottom: 16px;
+      letter-spacing: -.2px;
+    }
+    .calc-btn:active { background: var(--primary-dark); }
+
+    /* Footer */
+    footer {
+      text-align: center; font-size: 12px; color: var(--muted);
+      padding: 12px 16px 24px;
+    }
+    footer a { color: var(--primary); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🔥 FIRECalc</h1>
+  <p>Historical retirement simulation · 153 years of data</p>
+</header>
+
+<div class="container">
+
+  <!-- Results Banner -->
+  <div id="results-banner">
+    <div class="success-rate-label">Success rate</div>
+    <div id="success-rate" class="success-rate-value">—</div>
+    <div class="success-rate-sub" id="success-sub"></div>
+    <div class="result-meta" id="result-meta"></div>
+  </div>
+
+  <!-- Chart -->
+  <div id="chart-card">
+    <h2>Portfolio value over time — each line = one historical cycle</h2>
+    <canvas id="portfolioChart" height="220"></canvas>
+  </div>
+
+  <!-- Core Inputs -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">💰</span>
+      <h2>Your Situation</h2>
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label>Annual spending <span class="hint">(how much you'll spend each year)</span></label>
+        <div class="input-wrap has-prefix">
+          <span class="input-prefix">$</span>
+          <input type="number" id="spending" value="40000" min="1000" step="1000">
+        </div>
+      </div>
+      <div class="field">
+        <label>Portfolio size <span class="hint">(total nest egg today)</span></label>
+        <div class="input-wrap has-prefix">
+          <span class="input-prefix">$</span>
+          <input type="number" id="portfolio" value="1000000" min="10000" step="10000">
+        </div>
+      </div>
+      <div class="field">
+        <label>Years in retirement</label>
+        <div class="slider-row">
+          <input type="range" id="years-slider" min="5" max="60" value="30"
+            oninput="syncSlider(this, 'years', '%')">
+          <div class="slider-value"><span id="years-display">30</span> yrs</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Portfolio Settings -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">📊</span>
+      <h2>Portfolio Settings</h2>
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label>Stock allocation <span class="hint">(rest goes to bonds)</span></label>
+        <div class="slider-row">
+          <input type="range" id="stocks-slider" min="0" max="100" value="75"
+            oninput="syncSlider(this, 'stocks', '%')">
+          <div class="slider-value"><span id="stocks-display">75</span>%</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Annual fees <span class="hint">(expense ratio)</span></label>
+        <div class="slider-row">
+          <input type="range" id="fees-slider" min="0" max="200" value="18"
+            oninput="syncSlider(this, 'fees', 'bp')">
+          <div class="slider-value"><span id="fees-display">0.18</span>%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Withdrawal strategy -->
+    <button class="collapse-toggle" aria-expanded="false" onclick="toggleCollapse(this)">
+      Withdrawal strategy <span class="chevron">▼</span>
+    </button>
+    <div class="collapse-body hidden">
+      <div class="field">
+        <label>Strategy</label>
+        <select id="withdrawal-strategy">
+          <option value="constant">Constant spending (inflation-adjusted)</option>
+          <option value="percent">Fixed % of portfolio each year</option>
+          <option value="guardrails">Guardrails (reduce if portfolio drops)</option>
+        </select>
+      </div>
+      <div class="field" id="pct-spending-field" style="display:none">
+        <label>Withdrawal rate <span class="hint">(% of portfolio per year)</span></label>
+        <div class="slider-row">
+          <input type="range" id="pct-slider" min="10" max="100" value="40"
+            oninput="syncSlider(this, 'pct', 'x10bp')">
+          <div class="slider-value"><span id="pct-display">4.0</span>%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Other Income -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">🏦</span>
+      <h2>Other Income</h2>
+    </div>
+    <div class="card-body">
+      <div class="income-row">
+        <div class="field">
+          <label>Social Security / pension</label>
+          <div class="input-wrap has-prefix">
+            <span class="input-prefix">$</span>
+            <input type="number" id="ss-amount" value="0" min="0" step="500" placeholder="0">
+          </div>
+        </div>
+        <div class="field">
+          <label>Starts in year</label>
+          <input type="number" id="ss-year" value="15" min="0" max="60" step="1">
+        </div>
+      </div>
+      <div class="income-row">
+        <div class="field">
+          <label>Pension / other income</label>
+          <div class="input-wrap has-prefix">
+            <span class="input-prefix">$</span>
+            <input type="number" id="pension-amount" value="0" min="0" step="500" placeholder="0">
+          </div>
+        </div>
+        <div class="field">
+          <label>Starts in year</label>
+          <input type="number" id="pension-year" value="0" min="0" max="60" step="1">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button class="calc-btn" onclick="calculate()">Calculate →</button>
+
+  <!-- Footer -->
+  <footer>
+    Simulation uses ~153 years of US market data (1871–2023) based on<br>
+    <a href="https://shillerdata.com/" target="_blank" rel="noopener">Shiller's historical dataset</a>.
+    Results are historical — not a guarantee of future performance.<br>
+    Inspired by <a href="https://firecalc.com" target="_blank" rel="noopener">FIRECalc.com</a>.
+  </footer>
+
+</div>
+
+<script>
+// ─── Historical Data ────────────────────────────────────────────────────────
+// [year, realStockReturn%, realBondReturn%]
+// Based on Shiller's dataset: US stock market total real return (S&P composite
+// + dividends, CPI-adjusted) and 10-year treasury real return.
+const HISTORICAL = [
+  [1871, 18.2, 5.3],[1872, 9.4, -0.8],[1873, -10.4, 3.5],[1874, 2.7, 8.0],
+  [1875, 4.8, 4.2],[1876, -16.1, 3.5],[1877, -4.5, 7.1],[1878, 18.4, 10.5],
+  [1879, 47.3, 7.8],[1880, 19.0, -3.2],[1881, -1.4, -0.5],[1882, -3.5, 2.2],
+  [1883, -4.7, 3.8],[1884, -13.4, 7.3],[1885, 36.3, 8.5],[1886, 15.2, 1.7],
+  [1887, -7.8, 2.1],[1888, 4.0, 4.3],[1889, 2.1, 3.5],[1890, -10.0, 2.8],
+  [1891, 19.7, 5.9],[1892, 5.4, 3.4],[1893, -24.1, 3.8],[1894, 7.2, 9.4],
+  [1895, 8.1, 3.5],[1896, -7.1, 4.6],[1897, 20.7, 2.6],[1898, 22.4, 0.9],
+  [1899, 9.7, -4.5],[1900, 7.6, 4.3],
+  [1901, 21.3, -0.1],[1902, -0.2, 0.7],[1903, -20.5, 3.7],[1904, 39.2, 2.6],
+  [1905, 26.7, 0.1],[1906, -2.5, -1.7],[1907, -35.9, 2.8],[1908, 40.9, 4.2],
+  [1909, 16.5, 0.5],[1910, -13.2, 1.5],[1911, 3.3, 3.6],[1912, 5.5, 0.4],
+  [1913, -19.7, 0.4],[1914, -13.8, 3.5],[1915, 36.2, 2.5],[1916, -2.4, -3.9],
+  [1917, -35.8, -14.0],[1918, -5.0, -9.6],[1919, 21.0, -11.0],[1920, -20.6, -11.5],
+  [1921, 23.2, 11.5],[1922, 36.8, 6.4],[1923, -5.9, 1.1],[1924, 30.7, 5.8],
+  [1925, 28.5, -0.4],[1926, 13.4, 5.1],[1927, 37.7, 6.4],[1928, 42.6, 1.0],
+  [1929, -8.4, 4.6],[1930, -24.9, 7.5],[1931, -43.5, -3.1],[1932, -8.6, 15.1],
+  [1933, 53.9, 2.2],[1934, -3.1, 10.6],[1935, 47.7, 5.0],[1936, 35.0, 7.6],
+  [1937, -34.7, 0.2],[1938, 31.2, 5.5],[1939, -0.9, 5.9],[1940, -9.2, 6.5],
+  [1941, -12.6, -3.4],[1942, 20.3, -3.8],[1943, 25.6, -3.2],[1944, 19.5, -3.2],
+  [1945, 36.0, -1.5],[1946, -11.9, -9.6],[1947, 1.5, -7.7],[1948, 3.9, -1.5],
+  [1949, 18.5, 6.9],[1950, 30.6, -5.1],[1951, 23.4, -8.2],[1952, 18.4, -0.6],
+  [1953, -2.5, 1.6],[1954, 52.6, 4.9],[1955, 31.4, -0.2],[1956, 6.6, -4.2],
+  [1957, -11.0, 3.0],[1958, 43.3, -3.7],[1959, 11.6, -4.5],[1960, 0.4, 8.2],
+  [1961, 26.5, 0.9],[1962, -8.8, 5.8],[1963, 22.6, 1.2],[1964, 16.4, 3.7],
+  [1965, 12.5, -0.1],[1966, -10.0, 1.4],[1967, 23.9, -6.0],[1968, 10.8, -2.5],
+  [1969, -8.4, -7.6],[1970, 4.0, 10.7],[1971, 14.3, 6.3],[1972, 18.9, 2.7],
+  [1973, -14.7, -1.6],[1974, -26.5, -5.1],[1975, 37.2, 5.9],[1976, 23.8, 13.0],
+  [1977, -7.2, 0.5],[1978, 6.6, -1.8],[1979, 18.4, -4.3],[1980, 32.4, -3.4],
+  [1981, -4.9, 3.5],[1982, 21.4, 33.2],[1983, 22.4, 5.4],[1984, 6.3, 15.2],
+  [1985, 32.2, 25.3],[1986, 18.5, 22.0],[1987, 5.2, -3.8],[1988, 16.6, 4.8],
+  [1989, 31.5, 13.7],[1990, -3.1, 5.6],[1991, 30.5, 14.5],[1992, 7.6, 5.2],
+  [1993, 10.1, 13.5],[1994, 1.3, -8.3],[1995, 37.6, 23.6],[1996, 23.0, -0.5],
+  [1997, 33.4, 12.5],[1998, 28.6, 14.9],[1999, 21.0, -7.7],[2000, -9.1, 17.5],
+  [2001, -11.9, 5.7],[2002, -22.1, 15.1],[2003, 28.7, 0.6],[2004, 10.9, 4.4],
+  [2005, 4.9, 2.9],[2006, 15.8, 1.3],[2007, 5.5, 9.9],[2008, -37.0, 25.9],
+  [2009, 26.5, -11.1],[2010, 15.1, 8.5],[2011, 2.1, 16.0],[2012, 16.0, 2.9],
+  [2013, 32.4, -9.1],[2014, 13.7, 10.8],[2015, 1.4, 1.0],[2016, 12.0, 0.7],
+  [2017, 21.8, 2.5],[2018, -4.4, 0.0],[2019, 31.5, 9.7],[2020, 18.4, 11.0],
+  [2021, 28.7, -2.9],[2022, -18.1, -15.7],[2023, 26.3, 3.6],
+];
+
+// ─── Slider sync ────────────────────────────────────────────────────────────
+function syncSlider(el, id, unit) {
+  const v = parseInt(el.value);
+  const pct = ((v - el.min) / (el.max - el.min)) * 100;
+  el.style.setProperty('--pct', pct + '%');
+  const disp = document.getElementById(id + '-display');
+  if (unit === 'bp') {
+    disp.textContent = (v / 100).toFixed(2);
+  } else if (unit === 'x10bp') {
+    disp.textContent = (v / 10).toFixed(1);
+  } else {
+    disp.textContent = v;
+  }
+}
+
+// Init sliders
+document.querySelectorAll('input[type="range"]').forEach(el => {
+  const v = parseInt(el.value);
+  const pct = ((v - el.min) / (el.max - el.min)) * 100;
+  el.style.setProperty('--pct', pct + '%');
+});
+
+// Withdrawal strategy toggle
+document.getElementById('withdrawal-strategy').addEventListener('change', function() {
+  document.getElementById('pct-spending-field').style.display =
+    this.value === 'percent' ? 'block' : 'none';
+});
+
+// ─── Collapse ────────────────────────────────────────────────────────────────
+function toggleCollapse(btn) {
+  const expanded = btn.getAttribute('aria-expanded') === 'true';
+  btn.setAttribute('aria-expanded', !expanded);
+  btn.nextElementSibling.classList.toggle('hidden', expanded);
+}
+
+// ─── Simulation ─────────────────────────────────────────────────────────────
+function simulate(params) {
+  const { spending, portfolio, years, stockPct, fees, strategy, withdrawalRate,
+          ssAmount, ssYear, pensionAmount, pensionYear } = params;
+
+  const stockFrac = stockPct / 100;
+  const bondFrac  = 1 - stockFrac;
+  const feeRate   = fees / 10000; // basis points → fraction
+
+  const cycles = [];
+  const maxStart = HISTORICAL.length - years;
+
+  for (let startIdx = 0; startIdx <= maxStart; startIdx++) {
+    const startYear = HISTORICAL[startIdx][0];
+    let value = portfolio;
+    const path = [value];
+    let survived = true;
+
+    for (let yr = 0; yr < years; yr++) {
+      const [, stockR, bondR] = HISTORICAL[startIdx + yr];
+      const blendedReturn = (stockFrac * stockR + bondFrac * bondR) / 100 - feeRate;
+
+      // Income sources (all amounts are in real / today's dollars)
+      const income = (yr >= ssYear ? ssAmount : 0) + (yr >= pensionYear ? pensionAmount : 0);
+
+      // Net withdrawal this year
+      let withdrawal;
+      if (strategy === 'percent') {
+        withdrawal = Math.max(0, value * withdrawalRate - income);
+      } else if (strategy === 'guardrails') {
+        let base = spending - income;
+        if (value < portfolio * 0.8) base *= 0.9;   // tighten 10% if portfolio down 20%+
+        if (value < portfolio * 0.5) base *= 0.85;  // tighten more if down 50%+
+        withdrawal = Math.max(0, base);
+      } else {
+        withdrawal = Math.max(0, spending - income);
+      }
+
+      value = (value - withdrawal) * (1 + blendedReturn);
+      path.push(Math.max(0, value));
+      if (value <= 0) { survived = false; break; }
+    }
+
+    cycles.push({ startYear, survived, path });
+  }
+
+  const successCount = cycles.filter(c => c.survived).length;
+  const successRate  = (successCount / cycles.length) * 100;
+  return { cycles, successRate, totalCycles: cycles.length };
+}
+
+// ─── Chart ──────────────────────────────────────────────────────────────────
+let chartInstance = null;
+
+function drawChart(cycles, years) {
+  const labels = Array.from({ length: years + 1 }, (_, i) => 'Yr ' + i);
+
+  // Sample up to 150 cycles for display performance
+  let displayCycles = cycles;
+  if (cycles.length > 150) {
+    const step = Math.ceil(cycles.length / 150);
+    displayCycles = cycles.filter((_, i) => i % step === 0);
+  }
+
+  const datasets = displayCycles.map(c => ({
+    data: c.path,
+    borderColor: c.survived ? 'rgba(37,99,235,0.25)' : 'rgba(220,38,38,0.30)',
+    borderWidth: 1,
+    pointRadius: 0,
+    tension: 0.3,
+    fill: false,
+  }));
+
+  const ctx = document.getElementById('portfolioChart').getContext('2d');
+  if (chartInstance) chartInstance.destroy();
+
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      animation: false,
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false },
+      },
+      scales: {
+        x: {
+          ticks: { maxTicksLimit: 8, font: { size: 11 } },
+          grid: { color: 'rgba(0,0,0,.05)' },
+        },
+        y: {
+          ticks: {
+            font: { size: 11 },
+            callback: v => '$' + (v >= 1e6 ? (v/1e6).toFixed(1)+'M' :
+                                  v >= 1e3 ? (v/1e3).toFixed(0)+'k' : v),
+          },
+          grid: { color: 'rgba(0,0,0,.05)' },
+        },
+      },
+    },
+  });
+}
+
+// ─── Main calculate ──────────────────────────────────────────────────────────
+function calculate() {
+  const spending  = Math.max(1, parseFloat(document.getElementById('spending').value)  || 40000);
+  const portfolio = Math.max(1, parseFloat(document.getElementById('portfolio').value) || 1000000);
+  const years     = parseInt(document.getElementById('years-slider').value);
+  const stockPct  = parseInt(document.getElementById('stocks-slider').value);
+  const fees      = parseInt(document.getElementById('fees-slider').value);   // basis pts
+  const strategy  = document.getElementById('withdrawal-strategy').value;
+  const withdrawalRate = parseInt(document.getElementById('pct-slider').value) / 1000; // 40 → 4%
+  const ssAmount  = parseFloat(document.getElementById('ss-amount').value)  || 0;
+  const ssYear    = parseInt(document.getElementById('ss-year').value)  || 9999;
+  const pensionAmount = parseFloat(document.getElementById('pension-amount').value) || 0;
+  const pensionYear   = parseInt(document.getElementById('pension-year').value) || 0;
+
+  const { cycles, successRate, totalCycles } = simulate({
+    spending, portfolio, years, stockPct, fees, strategy, withdrawalRate,
+    ssAmount, ssYear, pensionAmount, pensionYear,
+  });
+
+  // ── Banner ──
+  const rateEl = document.getElementById('success-rate');
+  rateEl.textContent = successRate.toFixed(1) + '%';
+  rateEl.className = 'success-rate-value ' +
+    (successRate >= 90 ? 'great' : successRate >= 75 ? 'ok' : 'poor');
+
+  const successCount = cycles.filter(c => c.survived).length;
+  document.getElementById('success-sub').textContent =
+    successCount + ' of ' + totalCycles + ' historical cycles succeeded';
+
+  const wr = (spending / portfolio * 100).toFixed(1);
+  document.getElementById('result-meta').innerHTML =
+    `<span>Withdrawal rate: <strong>${wr}%</strong></span>` +
+    `<span>Allocation: <strong>${stockPct}/${100-stockPct}</strong> stocks/bonds</span>` +
+    `<span>Expense ratio: <strong>${(fees/100).toFixed(2)}%</strong></span>`;
+
+  document.getElementById('results-banner').className = 'show';
+  document.getElementById('chart-card').className = 'show';
+
+  drawChart(cycles, years);
+
+  // Scroll to results
+  document.getElementById('results-banner').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+</body>
+</html>
