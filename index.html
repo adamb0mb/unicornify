@@ -565,7 +565,7 @@ function calculate() {
   const pensionAmount = parseFloat(document.getElementById('pension-amount').value) || 0;
   const pensionYear   = parseInt(document.getElementById('pension-year').value) || 0;
 
-  const { cycles, successRate, totalCycles } = simulate({
+  const { cycles, successRate, totalCycles, median, p10, p90, worstCycle } = simulate({
     spending, portfolio, years, stockPct, fees, strategy, withdrawalRate,
     ssAmount, ssYear, pensionAmount, pensionYear,
   });
