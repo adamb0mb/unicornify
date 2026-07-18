@@ -345,6 +345,66 @@
     </div>
   </div>
 
+  <!-- Real Estate -->
+  <div class="card">
+    <div class="card-header">
+      <span class="icon">🏠</span>
+      <h2>Real Estate</h2>
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer">
+          <input type="checkbox" id="home-enabled" onchange="toggleHome(this)" style="width:18px;height:18px;accent-color:var(--primary)">
+          I plan to sell a home / property
+        </label>
+      </div>
+      <div id="home-fields" style="display:none;margin-top:4px">
+        <div class="income-row">
+          <div class="field">
+            <label>Current home value</label>
+            <div class="input-wrap has-prefix">
+              <span class="input-prefix">$</span>
+              <input type="number" id="home-value" value="500000" min="0" step="10000" oninput="updateHomePreview()">
+            </div>
+          </div>
+          <div class="field">
+            <label>Purchase price</label>
+            <div class="input-wrap has-prefix">
+              <span class="input-prefix">$</span>
+              <input type="number" id="home-basis" value="300000" min="0" step="10000" oninput="updateHomePreview()">
+            </div>
+          </div>
+        </div>
+        <div class="income-row">
+          <div class="field">
+            <label>Remaining mortgage</label>
+            <div class="input-wrap has-prefix">
+              <span class="input-prefix">$</span>
+              <input type="number" id="home-mortgage" value="0" min="0" step="10000" oninput="updateHomePreview()">
+            </div>
+          </div>
+          <div class="field">
+            <label>Sell in retirement year</label>
+            <input type="number" id="home-sale-year" value="1" min="1" max="60" step="1" oninput="updateHomePreview()">
+          </div>
+        </div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px">
+          Filing status:
+          <label style="margin-left:8px;font-weight:500;cursor:pointer">
+            <input type="radio" name="home-filing" value="married" checked onchange="updateHomePreview()"> Married
+          </label>
+          <label style="margin-left:12px;font-weight:500;cursor:pointer">
+            <input type="radio" name="home-filing" value="single" onchange="updateHomePreview()"> Single
+          </label>
+        </div>
+        <div id="home-preview" style="margin-top:12px;padding:10px 12px;background:var(--bg);border-radius:8px;font-size:13px;line-height:1.7;border:1px solid var(--border)"></div>
+        <p style="font-size:11px;color:var(--muted);margin-top:6px">
+          Assumes 3.5%/yr appreciation · 8% selling costs · 15% cap gains on taxable gain · $500k/$250k primary residence exclusion
+        </p>
+      </div>
+    </div>
+  </div>
+
   <button class="calc-btn" onclick="calculate()">Calculate →</button>
 
   <!-- Footer -->
@@ -426,6 +486,40 @@ document.getElementById('withdrawal-strategy').addEventListener('change', functi
     this.value === 'percent' ? 'block' : 'none';
 });
 
+// ─── Real Estate ─────────────────────────────────────────────────────────────
+function toggleHome(cb) {
+  document.getElementById('home-fields').style.display = cb.checked ? 'block' : 'none';
+  if (cb.checked) updateHomePreview();
+}
+
+function homeNetProceeds(yearsUntilSale) {
+  const value    = parseFloat(document.getElementById('home-value').value)    || 0;
+  const basis    = parseFloat(document.getElementById('home-basis').value)    || 0;
+  const mortgage = parseFloat(document.getElementById('home-mortgage').value) || 0;
+  const filing   = document.querySelector('input[name="home-filing"]:checked').value;
+
+  const saleValue    = value * Math.pow(1.035, yearsUntilSale);
+  const gain         = Math.max(0, saleValue - basis);
+  const exclusion    = filing === 'married' ? 500_000 : 250_000;
+  const taxableGain  = Math.max(0, gain - exclusion);
+  const capGainsTax  = taxableGain * 0.15;
+  const sellingCosts = saleValue * 0.08;
+  const net          = saleValue - sellingCosts - capGainsTax - mortgage;
+  return { saleValue, sellingCosts, capGainsTax, mortgage, net };
+}
+
+function updateHomePreview() {
+  const saleYear = parseInt(document.getElementById('home-sale-year').value) || 1;
+  const { saleValue, sellingCosts, capGainsTax, mortgage, net } = homeNetProceeds(saleYear);
+  const fmt = v => '$' + (v >= 1e6 ? (v/1e6).toFixed(2)+'M' : Math.round(v/1000)+'k');
+  document.getElementById('home-preview').innerHTML =
+    `Projected sale value <strong>${fmt(saleValue)}</strong><br>` +
+    `− Selling costs (8%) <strong>${fmt(sellingCosts)}</strong><br>` +
+    (capGainsTax > 0 ? `− Capital gains tax <strong>${fmt(capGainsTax)}</strong><br>` : '') +
+    (mortgage > 0    ? `− Mortgage payoff <strong>${fmt(mortgage)}</strong><br>` : '') +
+    `= <strong style="color:var(--primary)">Net proceeds ${fmt(Math.max(0, net))}</strong> added to portfolio in year ${saleYear}`;
+}
+
 // ─── Collapse ────────────────────────────────────────────────────────────────
 function toggleCollapse(btn) {
   const expanded = btn.getAttribute('aria-expanded') === 'true';
@@ -436,7 +530,8 @@ function toggleCollapse(btn) {
 // ─── Simulation ─────────────────────────────────────────────────────────────
 function simulate(params) {
   const { spending, portfolio, years, stockPct, fees, strategy, withdrawalRate,
-          ssAmount, ssYear, pensionAmount, pensionYear } = params;
+          ssAmount, ssYear, pensionAmount, pensionYear,
+          homeEnabled, homeSaleYear, homeNetAtSale } = params;
 
   const stockFrac = stockPct / 100;
   const bondFrac  = 1 - stockFrac;
@@ -474,6 +569,8 @@ function simulate(params) {
 
       // Grow first, then withdraw (end-of-year convention — matches FIRECalc canonical)
       value = value * (1 + blendedReturn) - withdrawal;
+      // Inject home sale proceeds at the specified retirement year
+      if (homeEnabled && yr + 1 === homeSaleYear) value += homeNetAtSale;
       path.push(Math.max(0, value));
       if (value <= 0) { survived = false; break; }
     }
@@ -565,9 +662,14 @@ function calculate() {
   const pensionAmount = parseFloat(document.getElementById('pension-amount').value) || 0;
   const pensionYear   = parseInt(document.getElementById('pension-year').value) || 0;
 
+  const homeEnabled  = document.getElementById('home-enabled').checked;
+  const homeSaleYear = parseInt(document.getElementById('home-sale-year').value) || 1;
+  const homeNetAtSale = homeEnabled ? Math.max(0, homeNetProceeds(homeSaleYear).net) : 0;
+
   const { cycles, successRate, totalCycles, median, p10, p90, worstCycle } = simulate({
     spending, portfolio, years, stockPct, fees, strategy, withdrawalRate,
     ssAmount, ssYear, pensionAmount, pensionYear,
+    homeEnabled, homeSaleYear, homeNetAtSale,
   });
 
   // ── Banner ──
